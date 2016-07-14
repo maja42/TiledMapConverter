@@ -1,0 +1,2 @@
+export\AniScraper.exe
+pause
