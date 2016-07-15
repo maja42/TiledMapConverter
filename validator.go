@@ -23,7 +23,7 @@ func ValidateTileMap(tilemap TileMap) error {
     if tilemap.Tilewidth != 256 || tilemap.Tileheight != 256 {
         return fmt.Errorf("Invalid tile size: %dx%d", tilemap.Tilewidth, tilemap.Tileheight)
     }
-    if len(tilemap.Layers) != 3 {
+    if len(tilemap.Layers) <= 0 && len(tilemap.Layers) >= 256 {
         return fmt.Errorf("Invalid layer count: %d", len(tilemap.Layers))
     }
     return nil

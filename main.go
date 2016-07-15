@@ -23,10 +23,10 @@ func main() {
 		return
 	}
 
-	var soureFile = os.Args[1]
-	var targetFile = GetTargetFilePath(soureFile)
+	var sourceFile = os.Args[1]
+	var targetFile = GetTargetFilePath(sourceFile)
 
-	tilemap, err := LoadTilesFile(soureFile)
+	tilemap, err := LoadTilesFile(sourceFile)
 	if err != nil {
 		log.Errorf("Failed to load source file: %v", err)
 		return
