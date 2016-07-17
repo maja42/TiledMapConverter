@@ -4,17 +4,9 @@ import (
     "bufio"
     "encoding/binary"
     "fmt"
-    "strconv"
-    "strings"
 )
 
-const (
-    FLIPPED_HORIZONTALLY_FLAG uint32 = 0x80000000
-    FLIPPED_VERTICALLY_FLAG   uint32 = 0x40000000
-    FLIPPED_DIAGONALLY_FLAG   uint32 = 0x20000000
-)
-
-func encode(writer *bufio.Writer, order binary.ByteOrder, tilemap TileMap) error {
+func Encode(writer *bufio.Writer, order binary.ByteOrder, tilemap TileMap, players []Player) error {
     if err := binary.Write(writer, order, uint32(tilemap.Width)); err != nil {
         return err
     }
@@ -23,41 +15,63 @@ func encode(writer *bufio.Writer, order binary.ByteOrder, tilemap TileMap) error
     }
     writer.WriteByte(byte(uint8(len(tilemap.Layers))))
 
-    expectedTileCount := tilemap.Width * tilemap.Height
-
     for i := len(tilemap.Layers) - 1; i >= 0; i-- {
         layer := tilemap.Layers[i]
-        tiles := strings.FieldsFunc(layer.Data, func(r rune) bool {
-            return r == ',' || r == '\n' || r == '\r'
-        })
-
-        if len(tiles) != expectedTileCount {
-            return fmt.Errorf("Unexpected layer data. Tile count doesn't match map size")
+        if err := encodeLayer(writer, order, &layer); err != nil {
+            return err
         }
-        for i := 0; i < len(tiles); i++ {
-            value, err := strconv.Atoi(tiles[i])
-            if err != nil {
-                return fmt.Errorf("Unexpected layer data. Failed to parse tile number: '%v'", tiles[i])
-            }
-            var tileNum = uint32(value)
+    }
+    writer.WriteByte(byte(0xAA)) // magic byte
 
-            var flags uint8 = 0
-            if tileNum&FLIPPED_HORIZONTALLY_FLAG != 0 {
-                flags |= 0x01
-            }
-            if tileNum&FLIPPED_VERTICALLY_FLAG != 0 {
-                flags |= 0x02
-            }
-            if tileNum&FLIPPED_DIAGONALLY_FLAG != 0 {
-                flags |= 0x04
-            }
-            tileNum &^= (FLIPPED_HORIZONTALLY_FLAG | FLIPPED_VERTICALLY_FLAG | FLIPPED_DIAGONALLY_FLAG)
+    writer.WriteByte(byte(uint8(len(players)))) // number of players
+    for _, player := range players {
+        if err := encodePlayer(writer, order, &player); err != nil {
+            return err
+        }
+    }
 
-            if tileNum < 0 || tileNum > 255 {
-                return fmt.Errorf("Unexpected layer data. Tile number can't be encoded (not within range [0,256]): %d", tileNum)
-            }
-            writer.WriteByte(byte(flags))
-            writer.WriteByte(byte(uint8(tileNum)))
+    writer.WriteByte(byte(0x55)) // magic byte
+    return nil
+}
+
+func encodeLayer(writer *bufio.Writer, order binary.ByteOrder, layer *TileMapLayer) error {
+    for _, tile := range layer.Tiles {
+        if tile.Index < 0 || tile.Index > 0xFF {
+            return fmt.Errorf("Tile index can't be encoded (not within range [0,256]): %d", tile.Index)
+        }
+        writer.WriteByte(byte(tile.Flags))
+        writer.WriteByte(byte(uint8(tile.Index)))
+    }
+    return nil
+}
+
+func encodePlayer(writer *bufio.Writer, order binary.ByteOrder, player *Player) error {
+    if err := binary.Write(writer, order, uint32(player.SpawnX)); err != nil {
+        return err
+    }
+    if err := binary.Write(writer, order, uint32(player.SpawnY)); err != nil {
+        return err
+    }
+    writer.WriteByte(byte(player.BaseBuildingFlags))
+
+    unitCount := len(player.Units)
+    if unitCount < 0 || unitCount > 0xFF {
+        return fmt.Errorf("Player units can't be encoded (unit count not within range [0,256]): %d", unitCount)
+    }
+
+    writer.WriteByte(byte(unitCount)) // Unit count
+
+    for _, unit := range player.Units {
+        if unit.Type < 0 || unit.Type > 0xFF {
+            return fmt.Errorf("Unit can't be encoded (unit type not within range [0,256]): %d", unit.Type)
+        }
+
+        writer.WriteByte(byte(unit.Type))
+        if err := binary.Write(writer, order, uint32(unit.SpawnX)); err != nil {
+            return err
+        }
+        if err := binary.Write(writer, order, uint32(unit.SpawnY)); err != nil {
+            return err
         }
     }
     return nil

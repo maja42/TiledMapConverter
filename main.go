@@ -34,10 +34,20 @@ func main() {
 
 	log.Info(tilemap.String())
 
-	err = ValidateTileMap(tilemap)
+	if err := ValidateTileMap(tilemap); err != nil {
+		log.Error(err)
+		return
+	}
+
+	players, err := ExtractSpawnInfo(tilemap)
 	if err != nil {
 		log.Error(err)
 		return
+	}
+
+	log.Infof("Number of players: %d", len(players))
+	for i, p := range players {
+		log.Infof("\tPlayer %d: %3d x%3d, %d units", i, p.SpawnX, p.SpawnY, len(p.Units))
 	}
 
 	log.Infof("Writing to '%s'", targetFile)
@@ -55,7 +65,7 @@ func main() {
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
-	err = encode(writer, binary.LittleEndian, tilemap)
+	err = Encode(writer, binary.LittleEndian, tilemap, players)
 	if err != nil {
 		log.Errorf("Failed to write output file: %v", err)
 		os.Remove(targetFile)
