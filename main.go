@@ -15,12 +15,12 @@ func GetTargetFilePath(sourceFile string) string {
 	return path + filename + ".tilemap"
 }
 
-func main() {
+func Run() int {
 	SetupLogger(logging.INFO)
 
 	if len(os.Args) != 2 {
 		log.Errorf("Usage: %s <inputfile.tmx>", os.Args[0])
-		return
+		return 1
 	}
 
 	var sourceFile = os.Args[1]
@@ -29,20 +29,20 @@ func main() {
 	tilemap, err := LoadTilesFile(sourceFile)
 	if err != nil {
 		log.Errorf("Failed to load source file: %v", err)
-		return
+		return 1
 	}
 
 	log.Info(tilemap.String())
 
 	if err := ValidateTileMap(tilemap); err != nil {
 		log.Error(err)
-		return
+		return 1
 	}
 
 	players, err := ExtractSpawnInfo(tilemap)
 	if err != nil {
 		log.Error(err)
-		return
+		return 1
 	}
 
 	log.Infof("Number of players: %d", len(players))
@@ -54,13 +54,13 @@ func main() {
 	err = os.Remove(targetFile)
 	if err != nil && !os.IsNotExist(err) {
 		log.Errorf("Failed to remove existing file '%v'", targetFile)
-		return
+		return 1
 	}
 
 	file, err := os.Create(targetFile)
 	if err != nil {
 		log.Errorf("Failed to create output file: %v", err)
-		return
+		return 1
 	}
 	defer file.Close()
 
@@ -69,9 +69,14 @@ func main() {
 	if err != nil {
 		log.Errorf("Failed to write output file: %v", err)
 		os.Remove(targetFile)
-		return
+		return 1
 	}
 	writer.Flush()
 
 	log.Info("Success")
+	return 0;
+}
+
+func main() {
+	os.Exit(Run())
 }
