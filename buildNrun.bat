@@ -9,7 +9,8 @@ call build.bat || goto :error
 
 echo Executing application
 echo *************************************
-call export\TiledMapConverter.exe || goto :error
+call export\TiledMapConverter.exe resources/defaultMap.tmx || goto :error
+pause
 
 goto :EOF
 :error

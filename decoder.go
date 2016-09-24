@@ -37,7 +37,25 @@ type Tile struct {
     Flags uint8
 }
 
-func (tileMap *TileMap) String() string {
+func (tilemap *TileMap) GetLayer(layername string) (int, error) {
+    layerIdx := -1
+    for idx, layer := range tilemap.Layers {
+        if layer.Name != layername {
+            continue
+        }
+        if layerIdx == -1 {
+            layerIdx = idx
+        } else {
+            return -1, fmt.Errorf("Multiple layers with name '%v' found", layername)
+        }
+    }
+    if layerIdx == -1 {
+        return -1, fmt.Errorf("No layer with name 'layername' found")
+    }
+    return layerIdx, nil
+}
+
+func (tilemap *TileMap) String() string {
     var str = fmt.Sprintf(
         "Version:           %v\n"+
             "Size:              %vx%v\n"+
@@ -45,14 +63,14 @@ func (tileMap *TileMap) String() string {
             "Orientation:       %v\n"+
             "Renderorder:       %v\n"+
             "Tile size:         %vx%v",
-        tileMap.Version,
-        tileMap.Width, tileMap.Height,
-        len(tileMap.Layers),
-        tileMap.Orientation,
-        tileMap.Renderorder,
-        tileMap.Tilewidth, tileMap.Tileheight)
+        tilemap.Version,
+        tilemap.Width, tilemap.Height,
+        len(tilemap.Layers),
+        tilemap.Orientation,
+        tilemap.Renderorder,
+        tilemap.Tilewidth, tilemap.Tileheight)
 
-    for i, layer := range tileMap.Layers {
+    for i, layer := range tilemap.Layers {
         str += fmt.Sprintf("\n\tLayer %d:  '%s'", i, layer.Name)
     }
     return str
@@ -84,8 +102,9 @@ func LoadTilesFile(filepath string) (tilemap TileMap, err error) {
     return tilemap, err
 }
 
+// extractTiles convert's the layers raw data into correct tile data.
 func (layer *TileMapLayer) extractTiles(expectedTileCount int) error {
-    tiles := strings.FieldsFunc(layer.RawData, func(r rune) bool {
+    tiles := strings.FieldsFunc(layer.RawData, func(r rune) bool { // remove separators
         return r == ',' || r == '\n' || r == '\r'
     })
 
@@ -126,4 +145,16 @@ func (layer *TileMapLayer) extractTiles(expectedTileCount int) error {
     }
 
     return nil
+}
+
+// GetTile returns the tile at a given position
+func (layer *TileMapLayer) GetTile(X, Y, MapWidth, MapHeight int) (tile Tile, err error) {
+    if X < 0 || X >= MapWidth || Y < 0 || Y >= MapHeight {
+        return tile, fmt.Errorf("Invalid coordinates supplied")
+    }
+    idx := Y*MapWidth + X
+    if idx < 0 || idx >= len(layer.Tiles) {
+        return tile, fmt.Errorf("Invalid map size supplied")
+    }
+    return layer.Tiles[idx], nil
 }
