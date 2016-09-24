@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"github.com/op/go-logging"
 	"os"
 	"path/filepath"
@@ -17,12 +18,19 @@ func GetTargetFilePath(sourceFile string) string {
 }
 
 func main() {
+	if err := Run(); err != nil {
+		log.Error(err)
+		os.Exit(1)
+	}
+	log.Info("Success")
+}
+
+// Run executes the application and returns an error message if something went wrong
+func Run() error {
 	SetupLogger(logging.INFO)
 
 	if len(os.Args) != 2 {
-		log.Errorf("Usage: %s <inputfile.tmx>", os.Args[0])
-		os.Exit(1)
-		return
+		return fmt.Errorf("Usage: %s <inputfile.tmx>", os.Args[0])
 	}
 
 	var sourceFile = os.Args[1]
@@ -30,28 +38,24 @@ func main() {
 
 	tilemap, err := LoadTilesFile(sourceFile)
 	if err != nil {
-		log.Errorf("Failed to load source file: %v", err)
-		return
+		return fmt.Errorf("Failed to load source file: %v", err)
 	}
 
 	log.Info("Input data:\n" + tilemap.String())
 	log.Infof("---------------------------------------")
 
 	if err := ValidateTileMap(tilemap); err != nil {
-		log.Error(err)
-		return
+		return err
 	}
 
 	resources, players, err := ExtractSpawnInfo(tilemap)
 	if err != nil {
-		log.Error(err)
-		return
+		return err
 	}
 
 	borders, err := ComputeBorder(tilemap)
 	if err != nil {
-		log.Error(err)
-		return
+		return err
 	}
 
 	log.Infof("Number of resource points: %d", len(resources))
@@ -72,25 +76,21 @@ func main() {
 	log.Infof("Writing to '%s'", targetFile)
 	err = os.Remove(targetFile)
 	if err != nil && !os.IsNotExist(err) {
-		log.Errorf("Failed to remove existing file '%v'", targetFile)
-		return
+		return fmt.Errorf("Failed to remove existing file '%v'", targetFile)
 	}
 
 	file, err := os.Create(targetFile)
 	if err != nil {
-		log.Errorf("Failed to create output file: %v", err)
-		return
+		return fmt.Errorf("Failed to create output file: %v", err)
 	}
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
 	err = Encode(writer, binary.LittleEndian, tilemap, resources, players, borders)
 	if err != nil {
-		log.Errorf("Failed to write output file: %v", err)
 		os.Remove(targetFile)
-		return
+		return fmt.Errorf("Failed to write output file: %v", err)
 	}
 	writer.Flush()
-
-	log.Info("Success")
+	return nil
 }

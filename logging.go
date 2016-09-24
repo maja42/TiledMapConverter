@@ -8,7 +8,7 @@ import (
 var log = logging.MustGetLogger("main")
 
 var format = logging.MustStringFormatter(
-    `%{color}%{time:15:04:05.000} %{shortfunc:20s} ▶ %{level:.4s}:%{color:reset} %{message}`,
+    `%{color}%{time:15:04:05.000} %{shortfunc:16s} > %{level:.4s}:%{color:reset} %{message}`,
 )
 
 func SetupLogger(consoleLevel logging.Level) {
