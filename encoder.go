@@ -19,6 +19,13 @@ func Encode(writer *bufio.Writer, order binary.ByteOrder, tilemap TileMap, resou
     }
     writer.WriteByte(byte(uint8(len(tilemap.Layers))))
 
+    environmentLayerIdx, err := tilemap.GetLayer("environment")
+    if err != nil {
+        return err
+    }
+    environmentLayerIdx = len(tilemap.Layers) - 1 - environmentLayerIdx // The layers will be stored in reversed order
+    writer.WriteByte(byte(environmentLayerIdx))
+
     for i := len(tilemap.Layers) - 1; i >= 0; i-- {
         layer := tilemap.Layers[i]
         if err := encodeLayer(writer, order, &layer); err != nil {
@@ -27,6 +34,9 @@ func Encode(writer *bufio.Writer, order binary.ByteOrder, tilemap TileMap, resou
     }
     writer.WriteByte(byte(0xAA)) // magic byte
 
+    if len(resourcePoints) < 0 || len(resourcePoints) > 0xFF {
+        return fmt.Errorf("Number of resource points can't be encoded (not within range [0,256]): %d", len(resourcePoints))
+    }
     writer.WriteByte(byte(uint8(len(resourcePoints)))) // number of resource points
     for _, resource := range resourcePoints {
         if err := encodeResourcePoint(writer, order, &resource); err != nil {
