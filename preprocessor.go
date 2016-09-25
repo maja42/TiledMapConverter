@@ -10,30 +10,58 @@ import (
 //     A position of 0,0 represents a border in the left-upper corner of the upper-left most tile.
 //     Since borders facing to the outside environment (outside the map) are invalid, all positions
 //     must be in the range [1, size-1], incl. A map of size 10 can therefore have borders of [1, 9].
+//     The actual direction is stored with the help of type SortedBorderLines
 type BorderLine struct {
     StartX int
     StartY int
-    EndX   int
-    EndY   int
+    Length int
+}
+
+type SortedBorderLines struct {
+    Left  []BorderLine // pointing left. solid terrain is above.
+    Right []BorderLine // pointing right. solid terrain is below.
+    Up    []BorderLine // pointing up. solid terrain is on the right.
+    Down  []BorderLine // pointing down. solid terrain is on the left.
+}
+
+func (borders *SortedBorderLines) String() string {
+    var str = fmt.Sprintf("Number of borders (left, right, up, down): %d, %d, %d, %d",
+        len(borders.Left), len(borders.Right), len(borders.Up), len(borders.Down))
+
+    for i, b := range borders.Left {
+        str += fmt.Sprintf("\tLeft  %4d: %3d x%3d, length %3d\n", i, b.StartX, b.StartY, b.Length)
+    }
+    for i, b := range borders.Right {
+        str += fmt.Sprintf("\tRight %4d: %3d x%3d, length %3d\n", i, b.StartX, b.StartY, b.Length)
+    }
+    for i, b := range borders.Up {
+        str += fmt.Sprintf("\tUp    %4d: %3d x%3d, length %3d\n", i, b.StartX, b.StartY, b.Length)
+    }
+    for i, b := range borders.Down {
+        str += fmt.Sprintf("\tDown  %4d: %3d x%3d, length %3d\n", i, b.StartX, b.StartY, b.Length)
+    }
+    return str
 }
 
 //
-func ComputeBorder(tilemap TileMap) ([]BorderLine, error) {
+func ComputeBorder(tilemap TileMap) (borders SortedBorderLines, err error) {
     environmentLayerIdx, err := tilemap.GetLayer("environment")
     if err != nil {
-        return nil, err
+        return borders, err
     }
 
-    borders, err := ComputeBorderOfLayer(tilemap.Width, tilemap.Height, tilemap.Layers[environmentLayerIdx])
-    if err != nil {
-        return nil, err
-    }
-    return borders, nil
+    borders, err = ComputeBorderOfLayer(tilemap.Width, tilemap.Height, tilemap.Layers[environmentLayerIdx])
+    return borders, err
 }
 
-func ComputeBorderOfLayer(width, height int, layer TileMapLayer) ([]BorderLine, error) {
-    var lines = make([]BorderLine, 0, 64)
+func ComputeBorderOfLayer(width, height int, layer TileMapLayer) (SortedBorderLines, error) {
     var err error
+    var borders = SortedBorderLines{
+        Left:  make([]BorderLine, 0, 64),
+        Right: make([]BorderLine, 0, 64),
+        Up:    make([]BorderLine, 0, 64),
+        Down:  make([]BorderLine, 0, 64),
+    }
 
     // Find horizontal borders:
     for y := 1; y < height; y++ {
@@ -45,10 +73,10 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) ([]BorderLine, 
             var mine Tile
 
             if above, err = layer.GetTile(x, y-1, width, height); err != nil {
-                return nil, fmt.Errorf("Failed to compute horizontal border (%dx%d-1): %v", x, y, err)
+                return borders, fmt.Errorf("Failed to compute horizontal border (%dx%d-1): %v", x, y, err)
             }
             if mine, err = layer.GetTile(x, y, width, height); err != nil {
-                return nil, fmt.Errorf("Failed to compute horizontal border (%dx%d): %v", x, y, err)
+                return borders, fmt.Errorf("Failed to compute horizontal border (%dx%d): %v", x, y, err)
             }
 
             // Border facing upwards
@@ -59,11 +87,10 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) ([]BorderLine, 
             } else {
                 if upwardsBorderStart != -1 { // the border just ended
                     upwardsBorderEnd := x
-                    lines = append(lines, BorderLine{
+                    borders.Right = append(borders.Right, BorderLine{ // below = solid
                         StartX: upwardsBorderStart,
                         StartY: y,
-                        EndX:   upwardsBorderEnd,
-                        EndY:   y,
+                        Length: upwardsBorderEnd - upwardsBorderStart,
                     })
                     upwardsBorderStart = -1
                 }
@@ -77,11 +104,10 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) ([]BorderLine, 
             } else {
                 if downwardsBorderStart != -1 { // the border just ended
                     downwardsBorderEnd := x
-                    lines = append(lines, BorderLine{
+                    borders.Left = append(borders.Left, BorderLine{ // above = solid
                         StartX: downwardsBorderEnd, // the border goes from right to left (solid region must be on its right side)
                         StartY: y,
-                        EndX:   downwardsBorderStart,
-                        EndY:   y,
+                        Length: downwardsBorderEnd - downwardsBorderStart,
                     })
                     downwardsBorderStart = -1
                 }
@@ -99,10 +125,10 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) ([]BorderLine, 
             var mine Tile
 
             if left, err = layer.GetTile(x-1, y, width, height); err != nil {
-                return nil, fmt.Errorf("Failed to compute vertical border (%d-1x%d): %v", x, y, err)
+                return borders, fmt.Errorf("Failed to compute vertical border (%d-1x%d): %v", x, y, err)
             }
             if mine, err = layer.GetTile(x, y, width, height); err != nil {
-                return nil, fmt.Errorf("Failed to compute vertical border (%dx%d): %v", x, y, err)
+                return borders, fmt.Errorf("Failed to compute vertical border (%dx%d): %v", x, y, err)
             }
 
             // Border facing to the left
@@ -113,11 +139,10 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) ([]BorderLine, 
             } else {
                 if leftBorderStart != -1 { // the border just ended
                     leftBorderEnd := y
-                    lines = append(lines, BorderLine{
+                    borders.Up = append(borders.Up, BorderLine{ // right = solid
                         StartX: x,
                         StartY: leftBorderStart,
-                        EndX:   x,
-                        EndY:   leftBorderEnd,
+                        Length: leftBorderEnd - leftBorderStart,
                     })
                     leftBorderStart = -1
                 }
@@ -131,11 +156,10 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) ([]BorderLine, 
             } else {
                 if rightBorderStart != -1 { // the border just ended
                     rightBorderEnd := y
-                    lines = append(lines, BorderLine{
+                    borders.Down = append(borders.Down, BorderLine{ // left = solid
                         StartX: x,
                         StartY: rightBorderEnd, // the border goes from right to left (solid region must be on its right side)
-                        EndX:   x,
-                        EndY:   rightBorderStart,
+                        Length: rightBorderEnd - rightBorderStart,
                     })
                     rightBorderStart = -1
                 }
@@ -146,8 +170,11 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) ([]BorderLine, 
     // Possible optimisation: if the map contains unreachable positions, it's borders can be dropped
 
     // Validate and reduce:
-    if len(lines) < 4 {
-        return nil, fmt.Errorf("Invalid map: Failed to compute border. A closed map contains at least 4 borders, found %d", len(lines))
+    if len(borders.Left) == 0 || len(borders.Right) == 0 || len(borders.Up) == 0 || len(borders.Down) == 0 {
+        return borders, fmt.Errorf("Invalid map: Failed to compute border. A closed map contains at least one border in each direction. "+
+            "Found (left, right, up, down): %d, %d, %d, %d ",
+            len(borders.Left), len(borders.Right), len(borders.Up), len(borders.Down))
     }
-    return lines, nil
+
+    return borders, nil
 }

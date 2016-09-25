@@ -68,10 +68,9 @@ func Run() error {
 		log.Infof("\tPlayer %d: %3d x%3d, %d units", i, p.SpawnX, p.SpawnY, len(p.Units))
 	}
 
-	log.Infof("Number of borders: %d", len(borders))
-	for i, b := range borders {
-		log.Debugf("\t%4d: %3d x%3d --> %3d x%3d", i, b.StartX, b.StartY, b.EndX, b.EndY)
-	}
+	log.Infof("Number of borders (left, right, up, down): %d, %d, %d, %d",
+		len(borders.Left), len(borders.Right), len(borders.Up), len(borders.Down))
+	log.Debug(borders.String())
 
 	log.Infof("Writing to '%s'", targetFile)
 	err = os.Remove(targetFile)

@@ -7,14 +7,14 @@ import (
 )
 
 // Encode encodes and writes the given tilemap into the writer (=output file)
-func Encode(writer *bufio.Writer, order binary.ByteOrder, tilemap TileMap, resourcePoints []ResourcePoint, players []Player, borders []BorderLine) error {
+func Encode(writer *bufio.Writer, order binary.ByteOrder, tilemap TileMap, resourcePoints []ResourcePoint, players []Player, borders SortedBorderLines) error {
     writer.WriteByte(byte(0xA5)) // magic byte
     writer.WriteByte(byte(0x02)) // magic byte used for versioning
 
-    if err := binary.Write(writer, order, uint32(tilemap.Width)); err != nil {
+    if err := binary.Write(writer, order, int16(tilemap.Width)); err != nil {
         return err
     }
-    if err := binary.Write(writer, order, uint32(tilemap.Height)); err != nil {
+    if err := binary.Write(writer, order, int16(tilemap.Height)); err != nil {
         return err
     }
     writer.WriteByte(byte(uint8(len(tilemap.Layers))))
@@ -72,11 +72,22 @@ func encodeLayer(writer *bufio.Writer, order binary.ByteOrder, layer *TileMapLay
     return nil
 }
 
-func encodePlayer(writer *bufio.Writer, order binary.ByteOrder, player *Player) error {
-    if err := binary.Write(writer, order, uint32(player.SpawnX)); err != nil {
+func encodeResourcePoint(writer *bufio.Writer, order binary.ByteOrder, resource *ResourcePoint) error {
+    if err := binary.Write(writer, order, int16(resource.SpawnX)); err != nil {
         return err
     }
-    if err := binary.Write(writer, order, uint32(player.SpawnY)); err != nil {
+    if err := binary.Write(writer, order, int16(resource.SpawnY)); err != nil {
+        return err
+    }
+    writer.WriteByte(byte(resource.ResourcePointFlags))
+    return nil
+}
+
+func encodePlayer(writer *bufio.Writer, order binary.ByteOrder, player *Player) error {
+    if err := binary.Write(writer, order, int16(player.SpawnX)); err != nil {
+        return err
+    }
+    if err := binary.Write(writer, order, int16(player.SpawnY)); err != nil {
         return err
     }
     writer.WriteByte(byte(player.BaseBuildingFlags))
@@ -94,45 +105,62 @@ func encodePlayer(writer *bufio.Writer, order binary.ByteOrder, player *Player) 
         }
 
         writer.WriteByte(byte(unit.Type))
-        if err := binary.Write(writer, order, uint32(unit.SpawnX)); err != nil {
+        if err := binary.Write(writer, order, int16(unit.SpawnX)); err != nil {
             return err
         }
-        if err := binary.Write(writer, order, uint32(unit.SpawnY)); err != nil {
+        if err := binary.Write(writer, order, int16(unit.SpawnY)); err != nil {
             return err
         }
     }
     return nil
 }
 
-func encodeResourcePoint(writer *bufio.Writer, order binary.ByteOrder, resource *ResourcePoint) error {
-    if err := binary.Write(writer, order, uint32(resource.SpawnX)); err != nil {
+func encodeBorders(writer *bufio.Writer, order binary.ByteOrder, borders SortedBorderLines) error {
+    if err := binary.Write(writer, order, int16(len(borders.Left))); err != nil {
         return err
     }
-    if err := binary.Write(writer, order, uint32(resource.SpawnY)); err != nil {
+    if err := binary.Write(writer, order, int16(len(borders.Right))); err != nil {
         return err
     }
-    writer.WriteByte(byte(resource.ResourcePointFlags))
+    if err := binary.Write(writer, order, int16(len(borders.Up))); err != nil {
+        return err
+    }
+    if err := binary.Write(writer, order, int16(len(borders.Down))); err != nil {
+        return err
+    }
+
+    for _, line := range borders.Left {
+        if err := encodeBorderLine(writer, order, line); err != nil {
+            return err
+        }
+    }
+    for _, line := range borders.Right {
+        if err := encodeBorderLine(writer, order, line); err != nil {
+            return err
+        }
+    }
+    for _, line := range borders.Up {
+        if err := encodeBorderLine(writer, order, line); err != nil {
+            return err
+        }
+    }
+    for _, line := range borders.Down {
+        if err := encodeBorderLine(writer, order, line); err != nil {
+            return err
+        }
+    }
     return nil
 }
 
-func encodeBorders(writer *bufio.Writer, order binary.ByteOrder, borders []BorderLine) error {
-    if err := binary.Write(writer, order, uint32(len(borders))); err != nil {
+func encodeBorderLine(writer *bufio.Writer, order binary.ByteOrder, borderLine BorderLine) error {
+    if err := binary.Write(writer, order, int16(borderLine.StartX)); err != nil {
         return err
     }
-
-    for _, line := range borders {
-        if err := binary.Write(writer, order, uint32(line.StartX)); err != nil {
-            return err
-        }
-        if err := binary.Write(writer, order, uint32(line.StartY)); err != nil {
-            return err
-        }
-        if err := binary.Write(writer, order, uint32(line.EndX)); err != nil {
-            return err
-        }
-        if err := binary.Write(writer, order, uint32(line.EndY)); err != nil {
-            return err
-        }
+    if err := binary.Write(writer, order, int16(borderLine.StartY)); err != nil {
+        return err
+    }
+    if err := binary.Write(writer, order, int16(borderLine.Length)); err != nil {
+        return err
     }
     return nil
 }
