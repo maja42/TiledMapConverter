@@ -26,5 +26,8 @@ func ValidateTileMap(tilemap TileMap) error {
     if len(tilemap.Layers) <= 0 && len(tilemap.Layers) >= 256 {
         return fmt.Errorf("Invalid layer count: %d", len(tilemap.Layers))
     }
+    if (len(tilemap.Tilesets) <= 0) {
+        return fmt.Errorf("No tileset detected.");
+    }
     return nil
 }

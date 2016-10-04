@@ -28,3 +28,7 @@ export
 
 *.sublime-project
 *.sublime-workspace
+
+# Ignore the .idea project
+/.idea
+TiledMapConverter.iml

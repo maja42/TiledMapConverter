@@ -17,6 +17,7 @@ type TileMap struct {
     Tilewidth   int    `xml:"tilewidth,attr"`
     Tileheight  int    `xml:"tileheight,attr"`
 
+    Tilesets []TileSet `xml:"tileset"`
     Layers []TileMapLayer `xml:"layer"`
 }
 
@@ -25,6 +26,15 @@ const (
     FlippedVerticallyTiledFlag   uint32 = 0x40000000
     FlippedDiagonallyTiledFlag   uint32 = 0x20000000
 )
+
+type TileSet struct {
+    FirstGid uint32 `xml:"firstgid,attr"`
+    Name string `xml:"name,attr"`
+    TileWidth int `xml:"tilewidth,attr"`
+    TileHeight int `xml:"tileheight,attr"`
+    TileCount uint32 `xml:"tilecount,attr"`
+    Columns int `xml:"columns,attr"`
+}
 
 type TileMapLayer struct {
     Name    string `xml:"name,attr"`
@@ -35,6 +45,7 @@ type TileMapLayer struct {
 type Tile struct {
     Index uint32
     Flags uint8
+    TileSet *TileSet
 }
 
 func (tilemap *TileMap) GetLayer(layername string) (int, error) {
@@ -62,7 +73,7 @@ func (tilemap *TileMap) String() string {
             "Layer count:       %v\n"+
             "Orientation:       %v\n"+
             "Renderorder:       %v\n"+
-            "Tile size:         %vx%v",
+            "Tile size:         %vx%v\n",
         tilemap.Version,
         tilemap.Width, tilemap.Height,
         len(tilemap.Layers),
@@ -70,6 +81,12 @@ func (tilemap *TileMap) String() string {
         tilemap.Renderorder,
         tilemap.Tilewidth, tilemap.Tileheight)
 
+    str += "Tilesets:"
+    for i, tileset := range tilemap.Tilesets {
+        str += fmt.Sprintf("\n\tTileset %d: '%s', firstgid=%d, count=%d", i, tileset.Name, tileset.FirstGid, tileset.TileCount)
+    }
+
+    str += "\nLayers:"
     for i, layer := range tilemap.Layers {
         str += fmt.Sprintf("\n\tLayer %d:  '%s'", i, layer.Name)
     }
@@ -95,7 +112,7 @@ func LoadTilesFile(filepath string) (tilemap TileMap, err error) {
 
     expectedTileCount := tilemap.Width * tilemap.Height
     for idx := range tilemap.Layers {
-        if err := tilemap.Layers[idx].extractTiles(expectedTileCount); err != nil {
+        if err := tilemap.Layers[idx].extractTiles(expectedTileCount, tilemap.Tilesets); err != nil {
             return tilemap, err
         }
     }
@@ -103,7 +120,7 @@ func LoadTilesFile(filepath string) (tilemap TileMap, err error) {
 }
 
 // extractTiles convert's the layers raw data into correct tile data.
-func (layer *TileMapLayer) extractTiles(expectedTileCount int) error {
+func (layer *TileMapLayer) extractTiles(expectedTileCount int, Tilesets[] TileSet) error {
     tiles := strings.FieldsFunc(layer.RawData, func(r rune) bool { // remove separators
         return r == ',' || r == '\n' || r == '\r'
     })
@@ -138,9 +155,24 @@ func (layer *TileMapLayer) extractTiles(expectedTileCount int) error {
             return fmt.Errorf("Unexpected layer data. Tile number is invalid (additional flag?)")
         }
 
+        // Check which tileset the tile belongs to
+        var tileSet *TileSet
+
+        if (tileID > 0) {
+            for i := 0; i < len(Tilesets) && tileID >= Tilesets[i].FirstGid; i++ {
+                tileSet = &Tilesets[i]
+            }
+
+            // Check whether the gid is really inside our tilesets
+            if (tileID >= tileSet.FirstGid + tileSet.TileCount) {
+                return fmt.Errorf("Unexpected tileID(%d). tileID does not belong to any tileset. Last valid id=%d", tileID, tileSet.FirstGid + tileSet.TileCount - 1)
+            }
+        }
+
         layer.Tiles[i] = Tile{
             Index: tileID,
             Flags: flags,
+            TileSet: tileSet,
         }
     }
 

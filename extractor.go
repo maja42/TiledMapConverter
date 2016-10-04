@@ -102,12 +102,21 @@ func ExtractSpawnInfoFromLayer(width, height int, layer TileMapLayer) ([]Resourc
     for y := 0; y < height; y++ {
         for x := 0; x < width; x++ {
             idx := y*width + x
-            tile := layer.Tiles[idx].Index
-            flags := layer.Tiles[idx].Flags
+            tile := layer.Tiles[idx]
+
+            var offset uint32
+            if (tile.TileSet == nil) {
+                offset = 0
+            } else {
+                offset = tile.TileSet.FirstGid - 1
+            }
+
+            tileID := tile.Index - offset
+            flags := tile.Flags
 
             // check if this is a resource spawn tile
             {
-                if tile == resourcePointMapping {
+                if tileID == resourcePointMapping {
                     resources = append(resources, ResourcePoint{
                         SpawnX:             x,
                         SpawnY:             y,
@@ -118,10 +127,10 @@ func ExtractSpawnInfoFromLayer(width, height int, layer TileMapLayer) ([]Resourc
 
             // check if this is a base tile
             {
-                mapping, ok := basemapping[tile]
+                mapping, ok := basemapping[tileID]
                 if ok {
                     if mapping.Player < 0 || mapping.Player >= 8 || players[mapping.Player].SpawnX != -1 {
-                        return nil, nil, fmt.Errorf("Failed to map tile: Invalid base building mapping or multiple base buildings for player %d (Tile = %d)", mapping.Player, tile)
+                        return nil, nil, fmt.Errorf("Failed to map tile: Invalid base building mapping or multiple base buildings for player %d (Tile = %d)", mapping.Player, tileID)
                     }
 
                     players[mapping.Player].SpawnX = x
@@ -133,10 +142,10 @@ func ExtractSpawnInfoFromLayer(width, height int, layer TileMapLayer) ([]Resourc
 
             // check if this is a unit tile
             {
-                mapping, ok := unitmapping[tile]
+                mapping, ok := unitmapping[tileID]
                 if ok {
                     if mapping.Player < 0 || mapping.Player >= 8 {
-                        return nil, nil, fmt.Errorf("Failed to map tile: Invalid unit mapping for player %d (Tile = %d)", mapping.Player, tile)
+                        return nil, nil, fmt.Errorf("Failed to map tile: Invalid unit mapping for player %d (Tile = %d)", mapping.Player, tileID)
                     }
                     newUnit := Unit{
                         Type:   mapping.Type,
