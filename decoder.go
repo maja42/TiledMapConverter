@@ -17,8 +17,8 @@ type TileMap struct {
     Tilewidth   int    `xml:"tilewidth,attr"`
     Tileheight  int    `xml:"tileheight,attr"`
 
-    Tilesets []TileSet `xml:"tileset"`
-    Layers []TileMapLayer `xml:"layer"`
+    Tilesets []TileSet      `xml:"tileset"`
+    Layers   []TileMapLayer `xml:"layer"`
 }
 
 const (
@@ -28,12 +28,12 @@ const (
 )
 
 type TileSet struct {
-    FirstGid uint32 `xml:"firstgid,attr"`
-    Name string `xml:"name,attr"`
-    TileWidth int `xml:"tilewidth,attr"`
-    TileHeight int `xml:"tileheight,attr"`
-    TileCount uint32 `xml:"tilecount,attr"`
-    Columns int `xml:"columns,attr"`
+    FirstGid   uint32 `xml:"firstgid,attr"`
+    Name       string `xml:"name,attr"`
+    TileWidth  int    `xml:"tilewidth,attr"`
+    TileHeight int    `xml:"tileheight,attr"`
+    TileCount  uint32 `xml:"tilecount,attr"`
+    Columns    int    `xml:"columns,attr"`
 }
 
 type TileMapLayer struct {
@@ -43,9 +43,115 @@ type TileMapLayer struct {
 }
 
 type Tile struct {
-    Index uint32
-    Flags uint8
+    Index   uint32
+    Flags   uint8
     TileSet *TileSet
+}
+
+const FIRST_DIAGONAL_TILE_TYPE uint32 = 6*8 + 1
+
+type TileType uint8
+
+const (
+    COMPLETELY_ACCESSIBLE TileType = 0
+    COMPLETELY_SOLID      TileType = 1
+    SOLID_AT_UPPER_LEFT   TileType = 2
+    SOLID_AT_UPPER_RIGHT  TileType = 3
+    SOLID_AT_LOWER_LEFT   TileType = 4
+    SOLID_AT_LOWER_RIGHT  TileType = 5
+)
+
+type Orientation uint8
+
+const (
+    LEFT      Orientation = 0
+    RIGHT     Orientation = 1
+    UP        Orientation = 2
+    DOWN      Orientation = 3
+    UPLEFT    Orientation = 4
+    UPRIGHT   Orientation = 5
+    DOWNLEFT  Orientation = 6
+    DOWNRIGHT Orientation = 7
+)
+
+func IsOrientationDiagonal(orientation Orientation) bool {
+    return uint8(orientation) >= uint8(UPLEFT)
+}
+
+func GetInvertedOrientation(orientation Orientation) Orientation {
+    switch orientation {
+    case LEFT:
+        return RIGHT
+    case RIGHT:
+        return LEFT
+    case UP:
+        return DOWN
+    case DOWN:
+        return UP
+    case UPLEFT:
+        return DOWNRIGHT
+    case UPRIGHT:
+        return DOWNLEFT
+    case DOWNLEFT:
+        return UPRIGHT
+    case DOWNRIGHT:
+        return UPLEFT
+    }
+    panic("Invalid tile type")
+}
+
+func (tile *Tile) IsCompletelyAccessible() bool {
+    return tile.Index == 0
+}
+
+func (tile *Tile) IsCompletelySolid() bool {
+    if tile.IsCompletelyAccessible() || tile.IsDiagonal() {
+        return false
+    }
+    return true
+}
+
+func (tile *Tile) IsDiagonal() bool {
+    return tile.Index >= FIRST_DIAGONAL_TILE_TYPE
+}
+
+func (tile *Tile) GetType() TileType {
+    if tile.Index == 0 {
+        return COMPLETELY_ACCESSIBLE
+    }
+    if !tile.IsDiagonal() {
+        return COMPLETELY_SOLID
+    }
+
+    if tile.Flags&0x04 != 0 {
+        if tile.Flags&0x01 != 0 {
+            return SOLID_AT_UPPER_RIGHT
+        } else if tile.Flags&0x02 != 0 {
+            return SOLID_AT_LOWER_LEFT
+        }
+    } else if ((tile.Flags & 0x01) != 0) && ((tile.Flags & 0x02) != 0) {
+        return SOLID_AT_LOWER_RIGHT
+    }
+    return SOLID_AT_UPPER_LEFT
+}
+
+// Returns true if this tile has a staight border on the top
+func (tile *Tile) HasBorderTowards(side Orientation) bool {
+    switch tile.GetType() {
+    case COMPLETELY_ACCESSIBLE:
+        return false
+    case COMPLETELY_SOLID:
+        return !IsOrientationDiagonal(side)
+    case SOLID_AT_UPPER_LEFT:
+        return side == LEFT || side == UP || side == DOWNRIGHT
+    case SOLID_AT_UPPER_RIGHT:
+        return side == RIGHT || side == UP || side == DOWNLEFT
+    case SOLID_AT_LOWER_LEFT:
+        return side == LEFT || side == DOWN || side == UPRIGHT
+    case SOLID_AT_LOWER_RIGHT:
+        return side == RIGHT || side == DOWN || side == UPLEFT
+    }
+    panic("Invalid tile type")
 }
 
 func (tilemap *TileMap) GetLayer(layername string) (int, error) {
@@ -120,7 +226,7 @@ func LoadTilesFile(filepath string) (tilemap TileMap, err error) {
 }
 
 // extractTiles convert's the layers raw data into correct tile data.
-func (layer *TileMapLayer) extractTiles(expectedTileCount int, Tilesets[] TileSet) error {
+func (layer *TileMapLayer) extractTiles(expectedTileCount int, Tilesets []TileSet) error {
     tiles := strings.FieldsFunc(layer.RawData, func(r rune) bool { // remove separators
         return r == ',' || r == '\n' || r == '\r'
     })
@@ -158,20 +264,20 @@ func (layer *TileMapLayer) extractTiles(expectedTileCount int, Tilesets[] TileSe
         // Check which tileset the tile belongs to
         var tileSet *TileSet
 
-        if (tileID > 0) {
+        if tileID > 0 {
             for i := 0; i < len(Tilesets) && tileID >= Tilesets[i].FirstGid; i++ {
                 tileSet = &Tilesets[i]
             }
 
             // Check whether the gid is really inside our tilesets
-            if (tileID >= tileSet.FirstGid + tileSet.TileCount) {
-                return fmt.Errorf("Unexpected tileID(%d). tileID does not belong to any tileset. Last valid id=%d", tileID, tileSet.FirstGid + tileSet.TileCount - 1)
+            if tileID >= tileSet.FirstGid+tileSet.TileCount {
+                return fmt.Errorf("Unexpected tileID(%d). tileID does not belong to any tileset. Last valid id=%d", tileID, tileSet.FirstGid+tileSet.TileCount-1)
             }
         }
 
         layer.Tiles[i] = Tile{
-            Index: tileID,
-            Flags: flags,
+            Index:   tileID,
+            Flags:   flags,
             TileSet: tileSet,
         }
     }

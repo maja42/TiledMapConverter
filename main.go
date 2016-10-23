@@ -4,9 +4,10 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"github.com/op/go-logging"
 	"os"
 	"path/filepath"
+
+	"github.com/op/go-logging"
 )
 
 // GetTargetFilePath returns the file path for the new, converted file that has the same name/path as the input file
@@ -27,7 +28,7 @@ func main() {
 
 // Run executes the application and returns an error message if something went wrong
 func Run() error {
-	SetupLogger(logging.INFO)
+	SetupLogger(logging.DEBUG)
 
 	if len(os.Args) != 2 {
 		return fmt.Errorf("Usage: %s <inputfile.tmx>", os.Args[0])
@@ -70,6 +71,8 @@ func Run() error {
 
 	log.Infof("Number of borders (left, right, up, down): %d, %d, %d, %d",
 		len(borders.Left), len(borders.Right), len(borders.Up), len(borders.Down))
+	log.Infof("Number of borders (up-left, up-right, down-left, down-right): %d, %d, %d, %d",
+		len(borders.UpLeft), len(borders.UpRight), len(borders.DownLeft), len(borders.DownRight))
 	log.Debug(borders.String())
 
 	log.Infof("Writing to '%s'", targetFile)

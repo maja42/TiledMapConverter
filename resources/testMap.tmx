@@ -1,33 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map version="1.0" orientation="orthogonal" renderorder="right-down" width="10" height="10" tilewidth="256" tileheight="256" nextobjectid="1">
- <tileset firstgid="1" name="map_tileset" tilewidth="256" tileheight="256" tilecount="264" columns="22">
-  <image source="../export/resources/map_tileset.png" width="5632" height="3072"/>
+ <tileset firstgid="1" name="StoneEnvironment" tilewidth="256" tileheight="256" tilecount="64" columns="8">
+  <image source="environment_tiles.png" width="2048" height="2048"/>
+ </tileset>
+ <tileset firstgid="65" name="map_tileset" tilewidth="256" tileheight="256" tilecount="264" columns="22">
+  <image source="spawn_tiles.png" width="5632" height="3072"/>
  </tileset>
  <layer name="environment" width="10" height="10">
   <data encoding="csv">
-67,67,67,67,67,67,67,67,67,67,
-67,0,0,0,0,0,0,0,0,67,
-67,0,0,0,0,67,67,0,0,67,
-67,0,0,67,67,0,0,0,0,67,
-67,0,0,0,0,0,0,0,0,67,
-67,0,0,0,0,0,0,0,67,67,
-67,0,0,0,0,0,0,0,67,0,
-67,0,0,0,0,0,0,67,67,0,
-67,0,0,0,0,0,67,67,0,0,
-67,67,67,67,67,67,67,0,0,0
+1,1,1,1,1,1,1,1,1,1,
+1,1,1,1,49,2684354609,1,1,1,1,
+1,1,54,54,0,0,2684354609,1,1,1,
+1,1,54,0,0,0,0,2684354609,1,1,
+1,49,0,0,0,0,0,0,2684354609,1,
+1,1610612785,0,0,0,0,0,0,3221225521,1,
+1,1,1610612785,0,0,0,0,3221225521,1,1,
+1,1,1,1610612785,0,0,3221225521,1,1,1,
+1,1,1,1,1610612785,3221225521,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1
 </data>
  </layer>
  <layer name="spawn" width="10" height="10">
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,
-0,82,0,0,0,0,0,0,0,0,
+0,146,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,
-0,0,0,14,0,0,0,0,0,0,
+0,0,0,78,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,
-0,1610612840,0,0,0,0,0,0,0,0,
+0,1610612904,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0
 </data>
  </layer>
