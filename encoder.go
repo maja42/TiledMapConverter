@@ -129,6 +129,19 @@ func encodeBorders(writer *bufio.Writer, order binary.ByteOrder, borders SortedB
         return err
     }
 
+    if err := binary.Write(writer, order, int16(len(borders.UpLeft))); err != nil {
+        return err
+    }
+    if err := binary.Write(writer, order, int16(len(borders.UpRight))); err != nil {
+        return err
+    }
+    if err := binary.Write(writer, order, int16(len(borders.DownLeft))); err != nil {
+        return err
+    }
+    if err := binary.Write(writer, order, int16(len(borders.DownRight))); err != nil {
+        return err
+    }
+
     for _, line := range borders.Left {
         if err := encodeBorderLine(writer, order, line); err != nil {
             return err
@@ -145,6 +158,27 @@ func encodeBorders(writer *bufio.Writer, order binary.ByteOrder, borders SortedB
         }
     }
     for _, line := range borders.Down {
+        if err := encodeBorderLine(writer, order, line); err != nil {
+            return err
+        }
+    }
+
+    for _, line := range borders.UpLeft {
+        if err := encodeBorderLine(writer, order, line); err != nil {
+            return err
+        }
+    }
+    for _, line := range borders.UpRight {
+        if err := encodeBorderLine(writer, order, line); err != nil {
+            return err
+        }
+    }
+    for _, line := range borders.DownLeft {
+        if err := encodeBorderLine(writer, order, line); err != nil {
+            return err
+        }
+    }
+    for _, line := range borders.DownRight {
         if err := encodeBorderLine(writer, order, line); err != nil {
             return err
         }
