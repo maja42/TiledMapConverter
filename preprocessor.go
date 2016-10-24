@@ -246,7 +246,7 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) (SortedBorderLi
                 }
             } else {
                 if upRightBorderStart != -1 { // the border just ended
-                    borders.DownLeft = append(borders.DownLeft, BorderLine{ // bottom left = solid
+                    borders.DownRight = append(borders.DownRight, BorderLine{ // bottom left = solid, border pointing down-right
                         StartX: firstX + upRightBorderStart,
                         StartY: firstY + upRightBorderStart,
                         Length: i - upRightBorderStart,
@@ -265,7 +265,7 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) (SortedBorderLi
                 }
             } else {
                 if downLeftBorderStart != -1 { // the border just ended
-                    borders.UpRight = append(borders.UpRight, BorderLine{ // upper right = solid
+                    borders.UpLeft = append(borders.UpLeft, BorderLine{ // upper right = solid, border pointing up-left
                         StartX: firstX + i,
                         StartY: firstY + i, // The border goes from down-right to upper-left
                         Length: i - downLeftBorderStart,
@@ -315,7 +315,7 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) (SortedBorderLi
                 }
             } else {
                 if upLeftBorderStart != -1 { // the border just ended
-                    borders.DownRight = append(borders.DownRight, BorderLine{ // bottom right = solid
+                    borders.UpRight = append(borders.UpRight, BorderLine{ // bottom right = solid, border pointing up-right
                         StartX: firstX + upLeftBorderStart,
                         StartY: firstY - upLeftBorderStart + 1,
                         Length: i - upLeftBorderStart,
@@ -334,7 +334,7 @@ func ComputeBorderOfLayer(width, height int, layer TileMapLayer) (SortedBorderLi
                 }
             } else {
                 if downRightBorderStart != -1 { // the border just ended
-                    borders.UpLeft = append(borders.UpLeft, BorderLine{ // upper left = solid
+                    borders.DownLeft = append(borders.DownLeft, BorderLine{ // upper left = solid, border pointing down-left
                         StartX: firstX + i,
                         StartY: firstY - i + 1, // The border goes from down-right to upper-left
                         Length: i - downRightBorderStart,
