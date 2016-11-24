@@ -49,7 +49,7 @@ func Run() error {
 		return err
 	}
 
-	resources, players, err := ExtractSpawnInfo(tilemap)
+	resources, waterdropSources, players, err := ExtractSpawnInfo(tilemap)
 	if err != nil {
 		return err
 	}
@@ -62,6 +62,11 @@ func Run() error {
 	log.Infof("Number of resource points: %d", len(resources))
 	for i, r := range resources {
 		log.Infof("\t%2d: %3d x%3d", i, r.SpawnX, r.SpawnY)
+	}
+
+	log.Infof("Number of water drop sources: %d", len(waterdropSources))
+	for i, s := range waterdropSources {
+		log.Infof("\t%2d: %3d x%3d", i, s.SpawnX, s.SpawnY)
 	}
 
 	log.Infof("Number of players: %d", len(players))
@@ -88,7 +93,7 @@ func Run() error {
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
-	err = Encode(writer, binary.LittleEndian, tilemap, resources, players, borders)
+	err = Encode(writer, binary.LittleEndian, tilemap, resources, waterdropSources, players, borders)
 	if err != nil {
 		os.Remove(targetFile)
 		return fmt.Errorf("Failed to write output file: %v", err)
