@@ -20,10 +20,8 @@ type WaterdropSource struct {
 
 // Player contains all spawn inform about a single player in the game.
 type Player struct {
-	SpawnX            int
-	SpawnY            int
-	BaseBuildingFlags uint8 // needed for rotation
-	Units             []Unit
+	Buildings []Building
+	Units     []Unit
 }
 
 // Unit contains all spawn information about a unit that should spawn at game start.
@@ -50,32 +48,54 @@ type UnitMapping struct {
 	Type   UnitType
 }
 
-// BaseMapping defines which .tmx tiles (tile-index) are used to spawn a player base
-type BaseMapping struct {
-	// []BaseMapping: tile-index to player
+type Building struct {
+	Type   BuildingType
+	SpawnX int
+	SpawnY int
+	Flags  uint8 // needed for rotation
+}
+
+type BuildingType int
+
+const (
+	BuildingType_Base    BuildingType = 1
+	BuildingType_Pump    BuildingType = 2
+	BuildingType_Factory BuildingType = 3
+	BuildingType_Turret  BuildingType = 4
+	BuildingType_Bridge  BuildingType = 5
+)
+
+// BuildingMapping defines which .tmx tiles (tile-index) are used to spawn a building
+type BuildingMapping struct {
+	// []BuildingMapping: tile-index to building type.
+	Type BuildingType
+}
+
+// PlayerMapping defines which .tmx tiles (tile-index) are used to spawn a building of a specific player (each building has a player-token in the up-left corner)
+type PlayerMapping struct {
+	// tile-index to player
 	Player int
 }
 
 func NewPlayer() *Player {
 	return &Player{
-		SpawnX:            -1,
-		SpawnY:            -1,
-		BaseBuildingFlags: 0x00,
-		Units:             make([]Unit, 0),
+		Buildings: make([]Building, 0),
+		Units:     make([]Unit, 0),
 	}
 }
 
-func GetTileMapping() (uint32, uint32, map[uint32]BaseMapping, map[uint32]UnitMapping) {
-	basemapping := make(map[uint32]BaseMapping)
+func GetTileMapping() (uint32, uint32, map[uint32]PlayerMapping, map[uint32]BuildingMapping, map[uint32]UnitMapping) {
+	playermapping := make(map[uint32]PlayerMapping)
+	buildingmapping := make(map[uint32]BuildingMapping)
 	unitmapping := make(map[uint32]UnitMapping)
 
-	// resource spawns
-	var resourcemapping uint32 = 173
+	// resource spawn mapping
+	var resourceMapping uint32 = 173
 
-	// water drop spawns
+	// water drop mapping
 	var waterdropSpawnMapping uint32 = 177
 
-	// Player spawns
+	// Unit + Player mapping
 	for i := 0; i < 8; i++ {
 		var firstIdx = uint32(1 + i*10 + (i/2)*20)
 
@@ -84,18 +104,25 @@ func GetTileMapping() (uint32, uint32, map[uint32]BaseMapping, map[uint32]UnitMa
 		unitmapping[firstIdx+4] = UnitMapping{i, UnitType_LongRange}
 		unitmapping[firstIdx+6] = UnitMapping{i, UnitType_Special}
 		unitmapping[firstIdx+8] = UnitMapping{i, UnitType_Construction}
-		basemapping[firstIdx+9] = BaseMapping{i}
+		playermapping[firstIdx+9] = PlayerMapping{i}
 	}
-	return resourcemapping, waterdropSpawnMapping, basemapping, unitmapping
+
+	// Building mapping
+	// For buildings, the upper-left tile is the player-token (playermapping). The tile on the right (depends on the rotation) defines the building type. So 2 tiles are responsible for defining a building.
+	buildingmapping[162] = BuildingMapping{BuildingType_Base}
+	buildingmapping[234] = BuildingMapping{BuildingType_Pump}
+	buildingmapping[238] = BuildingMapping{BuildingType_Turret}
+
+	return resourceMapping, waterdropSpawnMapping, playermapping, buildingmapping, unitmapping
 }
 
-func ExtractSpawnInfo(tilemap TileMap) ([]ResourcePoint, []WaterdropSource, []Player, error) {
+func ExtractSpawnInfo(tilemap *TileMap) ([]ResourcePoint, []WaterdropSource, []Player, error) {
 	spawnLayerIdx, err := tilemap.GetLayer("spawn")
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	resources, waterdropSources, player, err := ExtractSpawnInfoFromLayer(tilemap.Width, tilemap.Height, tilemap.Layers[spawnLayerIdx])
+	resources, waterdropSources, player, err := ExtractSpawnInfoFromLayer(tilemap.Width, tilemap.Height, &tilemap.Layers[spawnLayerIdx])
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -103,7 +130,7 @@ func ExtractSpawnInfo(tilemap TileMap) ([]ResourcePoint, []WaterdropSource, []Pl
 	return resources, waterdropSources, player, nil
 }
 
-func ExtractSpawnInfoFromLayer(width, height int, layer TileMapLayer) ([]ResourcePoint, []WaterdropSource, []Player, error) {
+func ExtractSpawnInfoFromLayer(width, height int, layer *TileMapLayer) ([]ResourcePoint, []WaterdropSource, []Player, error) {
 	var players = make([]Player, 8)
 	for i := 0; i < 8; i++ {
 		players[i] = *NewPlayer()
@@ -112,7 +139,7 @@ func ExtractSpawnInfoFromLayer(width, height int, layer TileMapLayer) ([]Resourc
 	var resources = make([]ResourcePoint, 0, 16)
 	var waterdrops = make([]WaterdropSource, 0, 4)
 
-	resourcePointMapping, waterdropSpawnMapping, basemapping, unitmapping := GetTileMapping()
+	resourceMapping, waterdropSpawnMapping, playerMapping, buildingMapping, unitMapping := GetTileMapping()
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
@@ -120,8 +147,12 @@ func ExtractSpawnInfoFromLayer(width, height int, layer TileMapLayer) ([]Resourc
 			tile := layer.Tiles[idx]
 
 			var offset uint32
-			if tile.TileSet == nil {
+			if tile.Index == 0 {
 				offset = 0
+			} else if tile.TileSet == nil {
+				return nil, nil, nil, fmt.Errorf("Invalid map: Unknown tileset (x=%d, y=%d, layer=%q)", x, y, layer.Name)
+			} else if tile.TileSet.Type != SPAWN_TILESET {
+				return nil, nil, nil, fmt.Errorf("Invalid tileset: The tile (x=%d, y=%d, layer=%q) should be part of the Spawn TileSet, but it is part of the tileset %q.", x, y, layer.Name, tile.TileSet.Name)
 			} else {
 				offset = tile.TileSet.FirstGid - 1
 			}
@@ -131,7 +162,7 @@ func ExtractSpawnInfoFromLayer(width, height int, layer TileMapLayer) ([]Resourc
 
 			// check if this is a resource spawn tile
 			{
-				if tileID == resourcePointMapping {
+				if tileID == resourceMapping {
 					if tile.IsMirrored() {
 						return nil, nil, nil, fmt.Errorf("Failed to map tile: Resource points must not be mirrored, only rotations are allowed.  (x=%d, y=%d)", x, y)
 					}
@@ -154,33 +185,15 @@ func ExtractSpawnInfoFromLayer(width, height int, layer TileMapLayer) ([]Resourc
 				}
 			}
 
-			// check if this is a base tile
-			{
-				mapping, ok := basemapping[tileID]
-				if ok {
-					if mapping.Player < 0 || mapping.Player >= 8 || players[mapping.Player].SpawnX != -1 {
-						return nil, nil, nil, fmt.Errorf("Failed to map tile: Invalid base building mapping or multiple base buildings for player %d (Tile = %d)", mapping.Player, tileID)
-					}
-					if tile.IsMirrored() {
-						return nil, nil, nil, fmt.Errorf("Failed to map tile: Buildings must not be mirrored, only rotations are allowed.  (x=%d, y=%d)", x, y)
-					}
-
-					players[mapping.Player].SpawnX = x
-					players[mapping.Player].SpawnY = y
-					players[mapping.Player].BaseBuildingFlags = flags
-					continue
-				}
-			}
-
 			// check if this is a unit tile
 			{
-				mapping, ok := unitmapping[tileID]
+				mapping, ok := unitMapping[tileID]
 				if ok {
 					if mapping.Player < 0 || mapping.Player >= 8 {
 						return nil, nil, nil, fmt.Errorf("Failed to map tile: Invalid unit mapping for player %d (Tile = %d)", mapping.Player, tileID)
 					}
 					if flags != 0 {
-						return nil, nil, nil, fmt.Errorf("Failed to map tile: Units must not be mirrored or rotated. (player %d, x=%d, y=%d)", mapping.Player, x, y)
+						return nil, nil, nil, fmt.Errorf("Failed to map tile: Units must not be mirrored or rotated. (player %d, x=%d, y=%d, layer=%q)", mapping.Player, x, y, layer.Name)
 					}
 
 					newUnit := Unit{
@@ -193,20 +206,80 @@ func ExtractSpawnInfoFromLayer(width, height int, layer TileMapLayer) ([]Resourc
 				}
 			}
 
+			// check if this is a building tile
+			{
+				mapping, ok := playerMapping[tileID]
+				if ok {
+					if mapping.Player < 0 || mapping.Player >= 8 {
+						return nil, nil, nil, fmt.Errorf("Failed to map tile: Invalid player mapping for player %d (Tile = %d, x=%d, y=%d, layer=%q)", mapping.Player, tileID, x, y, layer.Name)
+					}
+					if tile.IsMirrored() {
+						return nil, nil, nil, fmt.Errorf("Failed to map tile: Buildings must not be mirrored, only rotations are allowed. The player mapping tile (x=%d, y=%d, layer=%q) is mirrored", x, y, layer.Name)
+					}
+
+					// Now we know which player this building belongs to and how it is oriented. Now we need to know which type of building this is
+					var newBuilding Building
+					newBuilding.SpawnX = x
+					newBuilding.SpawnY = y
+					newBuilding.Flags = flags
+
+					vecX, vecY := tile.GetRightVector()
+					identX, identY := x+vecX, y+vecY
+					buildingTile := layer.Tiles[identY*width+identX]
+
+					var offset uint32
+					if buildingTile.TileSet == nil {
+						return nil, nil, nil, fmt.Errorf("Invalid map: Unknown tileset. The tile (x=%d, y=%d, layer=%q) should be part of the Spawn TileSet, but is empty.", identX, identY, layer.Name)
+					} else if tile.TileSet.Type != SPAWN_TILESET {
+						return nil, nil, nil, fmt.Errorf("Invalid tileset: The tile (x=%d, y=%d, layer=%q) should be part of the Spawn TileSet, but it is part of the tileset %q.", identX, identY, layer.Name, tile.TileSet.Name)
+					} else {
+						offset = tile.TileSet.FirstGid - 1
+					}
+
+					tileID := buildingTile.Index - offset
+					buildingFlags := buildingTile.Flags
+					if buildingFlags != flags {
+						return nil, nil, nil, fmt.Errorf("Invalid map: Inconsistent tile flags. The player mapping tile (x=%d, y=%d) and building tile (x=%d, y=%d) must have the same flags (layer=%q).", x, y, identX, identY, layer.Name)
+					}
+
+					buildingMapping, ok := buildingMapping[tileID]
+					if !ok {
+						return nil, nil, nil, fmt.Errorf("Invalid map: There exists a player-mapping tile (x=%d, y=%d) which indicates that there should be a building-spawn. However, the tile (x=%d, y=%d) has no valid building-mapping tile (layer=%q).", x, y, identX, identY, layer.Name)
+					}
+
+					newBuilding.Type = buildingMapping.Type
+					players[mapping.Player].Buildings = append(players[mapping.Player].Buildings, newBuilding)
+					continue
+				}
+			}
+
 		}
 	}
 
 	// Validate and reduce:
 	if len(resources) < 1 {
-		return nil, nil, nil, fmt.Errorf("Invalid map: Does not contain any resource points. (Needed >=1, Found %d)", len(resources))
+		return nil, nil, nil, fmt.Errorf("Invalid map: Does not contain any resource points. (Needs >=1, Found %d)", len(resources))
 	}
 	var actualPlayers = make([]Player, 0)
 	for i, p := range players {
-		if p.SpawnX < 0 || p.SpawnY < 0 { // Player does not exist
+		baseBuildingCount := 0
+		for _, b := range p.Buildings {
+			if b.Type == BuildingType_Base {
+				baseBuildingCount++
+			}
+		}
+
+		if baseBuildingCount <= 0 { // Player does not exist
 			if len(p.Units) != 0 {
 				return nil, nil, nil, fmt.Errorf("Invalid map: Player %d has no base building, but has units.", i)
 			}
+			if len(p.Buildings) != 0 {
+				return nil, nil, nil, fmt.Errorf("Invalid map: Player %d has no base building, but has other buildings.", i)
+			}
 			continue
+		}
+		if baseBuildingCount > 1 {
+			log.Warningf("Warning: Player %d has %d base buildings (more than one). This is ok, but maybe not intended.", i, baseBuildingCount)
 		}
 		actualPlayers = append(actualPlayers, p)
 	}

@@ -7,7 +7,7 @@ import (
 )
 
 // Encode encodes and writes the given tilemap into the writer (=output file)
-func Encode(writer *bufio.Writer, order binary.ByteOrder, tilemap TileMap, resourcePoints []ResourcePoint, waterdropSources []WaterdropSource, players []Player, borders SortedBorderLines) error {
+func Encode(writer *bufio.Writer, order binary.ByteOrder, tilemap *TileMap, resourcePoints []ResourcePoint, waterdropSources []WaterdropSource, players []Player, borders SortedBorderLines) error {
 	writer.WriteByte(byte(0xA5)) // magic byte
 	writer.WriteByte(byte(0x02)) // magic byte used for versioning
 
@@ -73,14 +73,42 @@ func Encode(writer *bufio.Writer, order binary.ByteOrder, tilemap TileMap, resou
 }
 
 func encodeLayer(writer *bufio.Writer, order binary.ByteOrder, layer *TileMapLayer) error {
-	for _, tile := range layer.Tiles {
-		if tile.Index < 0 || tile.Index > 0xFF {
-			return fmt.Errorf("Tile index can't be encoded (not within range [0,256]): %d", tile.Index)
+	tilesetType := probeLayer(layer)
+	writer.WriteByte(byte(tilesetType))
+
+	for i, tile := range layer.Tiles {
+		var offset uint32
+		if tile.TileSet == nil {
+			offset = 0
+		} else {
+			offset = tile.TileSet.FirstGid - 1
 		}
+		tileID := tile.Index - offset
+
+		if tileID > 0 && tile.TileSet.Type != tilesetType {
+			return fmt.Errorf("The tile (%d, layer=%q) can't be encoded. All tiles within a layer must come from the same tileset.", i, layer.Name)
+		}
+
+		if tileID < 0 || tileID > 0xFF {
+			return fmt.Errorf("Tile index can't be encoded (not within range [0,256]): %d", tileID)
+		}
+
 		writer.WriteByte(byte(tile.Flags))
-		writer.WriteByte(byte(uint8(tile.Index)))
+		writer.WriteByte(byte(uint8(tileID)))
+
 	}
 	return nil
+}
+
+// probeLayer goes through all tiles and returns the tileset-type of the first occupied tile it finds
+func probeLayer(layer *TileMapLayer) TileSetType {
+	for _, tile := range layer.Tiles {
+		if tile.Index > 0 {
+			return tile.TileSet.Type
+		}
+	}
+	log.Warningf("The layer %q is completely empty and should be removed", layer.Name)
+	return DECORATION_TILESET
 }
 
 func encodeResourcePoint(writer *bufio.Writer, order binary.ByteOrder, resource *ResourcePoint) error {
@@ -106,14 +134,43 @@ func encodeWaterdropSource(writer *bufio.Writer, order binary.ByteOrder, source 
 }
 
 func encodePlayer(writer *bufio.Writer, order binary.ByteOrder, player *Player) error {
-	if err := binary.Write(writer, order, int16(player.SpawnX)); err != nil {
+	if err := encodeBuildings(writer, order, player); err != nil {
 		return err
 	}
-	if err := binary.Write(writer, order, int16(player.SpawnY)); err != nil {
+	if err := encodeUnits(writer, order, player); err != nil {
 		return err
 	}
-	writer.WriteByte(byte(player.BaseBuildingFlags))
+	return nil
+}
 
+func encodeBuildings(writer *bufio.Writer, order binary.ByteOrder, player *Player) error {
+	buildingCount := len(player.Buildings)
+	if buildingCount < 0 || buildingCount > 0xFF {
+		return fmt.Errorf("Player buildings can't be encoded (building count not within range [0,256]): %d", buildingCount)
+	}
+
+	writer.WriteByte(byte(buildingCount)) // Building count
+
+	for _, building := range player.Buildings {
+		if building.Type < 0 || building.Type > 0xFF {
+			return fmt.Errorf("Building can't be encoded (building type not within range [0,256]): %d", building.Type)
+		}
+
+		writer.WriteByte(byte(building.Type))
+
+		if err := binary.Write(writer, order, int16(building.SpawnX)); err != nil {
+			return err
+		}
+		if err := binary.Write(writer, order, int16(building.SpawnY)); err != nil {
+			return err
+		}
+
+		writer.WriteByte(byte(building.Flags))
+	}
+	return nil
+}
+
+func encodeUnits(writer *bufio.Writer, order binary.ByteOrder, player *Player) error {
 	unitCount := len(player.Units)
 	if unitCount < 0 || unitCount > 0xFF {
 		return fmt.Errorf("Player units can't be encoded (unit count not within range [0,256]): %d", unitCount)
@@ -136,7 +193,6 @@ func encodePlayer(writer *bufio.Writer, order binary.ByteOrder, player *Player) 
 	}
 	return nil
 }
-
 func encodeBorders(writer *bufio.Writer, order binary.ByteOrder, borders SortedBorderLines) error {
 	if err := binary.Write(writer, order, int16(len(borders.Left))); err != nil {
 		return err

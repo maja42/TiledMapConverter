@@ -27,13 +27,22 @@ const (
 	FlippedDiagonallyTiledFlag   uint32 = 0x20000000
 )
 
+type TileSetType uint8
+
+const (
+	ENVIRONMENT_TILESET TileSetType = 0
+	DECORATION_TILESET  TileSetType = 1
+	SPAWN_TILESET       TileSetType = 2
+)
+
 type TileSet struct {
-	FirstGid   uint32 `xml:"firstgid,attr"`
-	Name       string `xml:"name,attr"`
-	TileWidth  int    `xml:"tilewidth,attr"`
-	TileHeight int    `xml:"tileheight,attr"`
-	TileCount  uint32 `xml:"tilecount,attr"`
-	Columns    int    `xml:"columns,attr"`
+	Type       TileSetType `xml:"-"`
+	FirstGid   uint32      `xml:"firstgid,attr"`
+	Name       string      `xml:"name,attr"`
+	TileWidth  int         `xml:"tilewidth,attr"`
+	TileHeight int         `xml:"tileheight,attr"`
+	TileCount  uint32      `xml:"tilecount,attr"`
+	Columns    int         `xml:"columns,attr"`
 }
 
 type TileMapLayer struct {
@@ -130,6 +139,35 @@ func (tile *Tile) GetType() TileType {
 	return FlagLookupTable[tile.Flags&0x07]
 }
 
+// GetRightVector analyses the flags (rotation and flipping), and returns a vector that points upwards, depending on the actual flags. (If rotated 90deg CW, (0,1) is returned)
+func (tile *Tile) GetUpVector() (int, int) {
+	switch tile.Flags & 0x07 {
+	case 0:
+		return 0, -1 // up
+	case 1:
+		return -1, 0 // left
+	case 2:
+		return 1, 0 // right
+	case 3:
+		return 0, 1 // down
+
+	case 4:
+		return 0, 1 // down
+	case 5:
+		return 1, 0 // right
+	case 6:
+		return -1, 0 // left
+	case 7:
+		return 0, -1 // up
+	}
+	panic("Invalid state")
+}
+
+func (tile *Tile) GetRightVector() (int, int) {
+	x, y := tile.GetUpVector()
+	return -y, x
+}
+
 func PopCount(b uint8) uint8 {
 	b = b - ((b >> 1) & 0x55)
 	b = (b & 0x33) + ((b >> 2) & 0x33)
@@ -221,6 +259,20 @@ func LoadTilesFile(filepath string) (tilemap TileMap, err error) {
 		return tilemap, err
 	}
 
+	// Validate tilesets and assign types:
+	for idx, tileset := range tilemap.Tilesets {
+		switch strings.ToLower(tileset.Name) {
+		case "environment":
+			tilemap.Tilesets[idx].Type = ENVIRONMENT_TILESET
+		case "decoration":
+			tilemap.Tilesets[idx].Type = DECORATION_TILESET
+		case "spawn":
+			tilemap.Tilesets[idx].Type = SPAWN_TILESET
+		default:
+			return tilemap, fmt.Errorf("Failed to read source file '%v': Invalid tilesets detected. The tilset name '%v' is not allowed and must be 'environment', 'decoration' or 'spawn'.", filepath, tileset.Name)
+		}
+	}
+
 	expectedTileCount := tilemap.Width * tilemap.Height
 	for idx := range tilemap.Layers {
 		if err := tilemap.Layers[idx].extractTiles(expectedTileCount, tilemap.Tilesets); err != nil {
@@ -276,7 +328,7 @@ func (layer *TileMapLayer) extractTiles(expectedTileCount int, Tilesets []TileSe
 
 			// Check whether the gid is really inside our tilesets
 			if tileID >= tileSet.FirstGid+tileSet.TileCount {
-				return fmt.Errorf("Unexpected tileID(%d). tileID does not belong to any tileset. Last valid id=%d", tileID, tileSet.FirstGid+tileSet.TileCount-1)
+				return fmt.Errorf("Unexpected tileID %d. tileID does not belong to any tileset. Last valid id=%d", tileID, tileSet.FirstGid+tileSet.TileCount-1)
 			}
 		}
 

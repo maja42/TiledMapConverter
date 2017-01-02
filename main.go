@@ -45,40 +45,40 @@ func Run() error {
 	log.Info("Input data:\n" + tilemap.String())
 	log.Infof("---------------------------------------")
 
-	if err := ValidateTileMap(tilemap); err != nil {
+	if err := ValidateTileMap(&tilemap); err != nil {
 		return err
 	}
 
-	resources, waterdropSources, players, err := ExtractSpawnInfo(tilemap)
+	resources, waterdropSources, players, err := ExtractSpawnInfo(&tilemap)
 	if err != nil {
 		return err
 	}
 
-	borders, err := ComputeBorder(tilemap)
+	borders, err := ComputeBorder(&tilemap)
 	if err != nil {
 		return err
 	}
 
 	log.Infof("Number of resource points: %d", len(resources))
-	for i, r := range resources {
-		log.Infof("\t%2d: %3d x%3d", i, r.SpawnX, r.SpawnY)
-	}
+	// for i, r := range resources {
+	// 	log.Debugf("\t%2d: %3d x%3d", i, r.SpawnX, r.SpawnY)
+	// }
 
 	log.Infof("Number of water drop sources: %d", len(waterdropSources))
-	for i, s := range waterdropSources {
-		log.Infof("\t%2d: %3d x%3d", i, s.SpawnX, s.SpawnY)
-	}
+	// for i, s := range waterdropSources {
+	// 	log.Debugf("\t%2d: %3d x%3d", i, s.SpawnX, s.SpawnY)
+	// }
 
 	log.Infof("Number of players: %d", len(players))
 	for i, p := range players {
-		log.Infof("\tPlayer %d: %3d x%3d, %d units", i, p.SpawnX, p.SpawnY, len(p.Units))
+		log.Infof("\tPlayer %d: %d buildings, %d units", i, len(p.Buildings), len(p.Units))
 	}
 
 	log.Infof("Number of borders (left, right, up, down): %d, %d, %d, %d",
 		len(borders.Left), len(borders.Right), len(borders.Up), len(borders.Down))
 	log.Infof("Number of borders (up-left, up-right, down-left, down-right): %d, %d, %d, %d",
 		len(borders.UpLeft), len(borders.UpRight), len(borders.DownLeft), len(borders.DownRight))
-	log.Debug(borders.String())
+	//log.Debug(borders.String())
 
 	log.Infof("Writing to '%s'", targetFile)
 	err = os.Remove(targetFile)
@@ -93,7 +93,7 @@ func Run() error {
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
-	err = Encode(writer, binary.LittleEndian, tilemap, resources, waterdropSources, players, borders)
+	err = Encode(writer, binary.LittleEndian, &tilemap, resources, waterdropSources, players, borders)
 	if err != nil {
 		os.Remove(targetFile)
 		return fmt.Errorf("Failed to write output file: %v", err)
