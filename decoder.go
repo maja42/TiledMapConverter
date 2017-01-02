@@ -17,8 +17,13 @@ type TileMap struct {
 	Tilewidth   int    `xml:"tilewidth,attr"`
 	Tileheight  int    `xml:"tileheight,attr"`
 
-	Tilesets []TileSet      `xml:"tileset"`
-	Layers   []TileMapLayer `xml:"layer"`
+	Tilesets     []TileSet            `xml:"tileset"`
+	Layers       []TileMapLayer       `xml:"layer"`
+	ObjectLayers []TileMapObjectLayer `xml:"objectgroup"`
+
+	// Will be extracter after loading:
+	BackgroundObjectLayer *TileMapObjectLayer `xml:"-"`
+	ForegroundObjectLayer *TileMapObjectLayer `xml:"-"`
 }
 
 const (
@@ -55,6 +60,23 @@ type Tile struct {
 	Index   uint32
 	Flags   uint8
 	TileSet *TileSet
+}
+
+type TileMapObjectLayer struct {
+	Name    string          `xml:"name,attr"`
+	Objects []TileMapObject `xml:"object"`
+}
+
+type TileMapObject struct {
+	Id       uint32   `xml:"id,attr"`
+	Index    uint32   `xml:"gid,attr"`
+	Flags    uint8    `xml:"-"`
+	X        float32  `xml:"x,attr"`
+	Y        float32  `xml:"y,attr"`
+	Width    float32  `xml:"width,attr"`
+	Height   float32  `xml:"height,attr"`
+	Rotation float32  `xml:"rotation,attr"`
+	TileSet  *TileSet `xml:"-"`
 }
 
 const FIRST_DIAGONAL_TILE_TYPE uint32 = 6*8 + 1
@@ -271,6 +293,64 @@ func LoadTilesFile(filepath string) (tilemap TileMap, err error) {
 		default:
 			return tilemap, fmt.Errorf("Failed to read source file '%v': Invalid tilesets detected. The tilset name '%v' is not allowed and must be 'environment', 'decoration' or 'spawn'.", filepath, tileset.Name)
 		}
+	}
+
+	// Validate objects and assign types:
+	for idx := 0; idx < len(tilemap.ObjectLayers); idx++ {
+		objectLayer := &tilemap.ObjectLayers[idx]
+
+		if strings.ToLower(objectLayer.Name) == "backgroundobjects" {
+			if tilemap.BackgroundObjectLayer != nil {
+				return tilemap, fmt.Errorf("Multiple background object layers found. Only one layer is supported")
+			}
+			tilemap.BackgroundObjectLayer = objectLayer
+		} else if strings.ToLower(objectLayer.Name) == "foregroundobjects" {
+			if tilemap.ForegroundObjectLayer != nil {
+				return tilemap, fmt.Errorf("Multiple foreground object layers found. Only one layer is supported")
+			}
+			tilemap.ForegroundObjectLayer = objectLayer
+		} else {
+			return tilemap, fmt.Errorf("Invalid TileMap: Unsupported object layer. There can be only two object layers, one named 'BackgroundObjects' and one named 'ForegroundObjects'. Found object layer with name %q, objectLayer.Name")
+		}
+
+		for obj := 0; obj < len(objectLayer.Objects); obj++ {
+			object := &objectLayer.Objects[obj]
+			var tileID = object.Index
+
+			// extract object flags
+			var flags uint8 = 0
+			if tileID&FlippedHorizontallyTiledFlag != 0 {
+				flags |= 0x01
+			}
+			if tileID&FlippedVerticallyTiledFlag != 0 {
+				flags |= 0x02
+			}
+			if tileID&FlippedDiagonallyTiledFlag != 0 {
+				flags |= 0x04
+			}
+			tileID &^= (FlippedHorizontallyTiledFlag | FlippedVerticallyTiledFlag | FlippedDiagonallyTiledFlag)
+
+			if tileID < 0 || tileID > 0xFFFFFF {
+				return tilemap, fmt.Errorf("Unexpected object layer data. Tile number is invalid (additional flag?)")
+			}
+			object.Index = tileID
+			object.Flags = flags
+
+			// Check which tileset the object belongs to
+			var tileSet *TileSet
+			if tileID > 0 {
+				for i := 0; i < len(tilemap.Tilesets) && tileID >= tilemap.Tilesets[i].FirstGid; i++ {
+					tileSet = &tilemap.Tilesets[i]
+				}
+
+				// Check whether the gid is really inside our tileset
+				if tileID >= tileSet.FirstGid+tileSet.TileCount {
+					return tilemap, fmt.Errorf("Unexpected object tile id %d. tileID does not belong to any tileset. Last valid id=%d", tileID, tileSet.FirstGid+tileSet.TileCount-1)
+				}
+			}
+			object.TileSet = tileSet
+		}
+
 	}
 
 	expectedTileCount := tilemap.Width * tilemap.Height

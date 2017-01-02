@@ -34,6 +34,15 @@ func Encode(writer *bufio.Writer, order binary.ByteOrder, tilemap *TileMap, reso
 	}
 	writer.WriteByte(byte(0xAA)) // magic byte
 
+	if err := encodeObjectLayer(writer, order, tilemap.BackgroundObjectLayer); err != nil {
+		return fmt.Errorf("Failed to encode BackgroundObjectLayer: %v", err)
+	}
+	if err := encodeObjectLayer(writer, order, tilemap.ForegroundObjectLayer); err != nil {
+		return fmt.Errorf("Failed to encode ForegroundObjectLayer: %v", err)
+	}
+
+	writer.WriteByte(byte(0x99)) // magic byte
+
 	if len(resourcePoints) < 0 || len(resourcePoints) > 0xFF {
 		return fmt.Errorf("Number of resource points can't be encoded (not within range [0,256]): %d", len(resourcePoints))
 	}
@@ -109,6 +118,66 @@ func probeLayer(layer *TileMapLayer) TileSetType {
 	}
 	log.Warningf("The layer %q is completely empty and should be removed", layer.Name)
 	return DECORATION_TILESET
+}
+
+func encodeObjectLayer(writer *bufio.Writer, order binary.ByteOrder, layer *TileMapObjectLayer) error {
+	var objectCount int = 0
+	if layer != nil {
+		objectCount = len(layer.Objects)
+	}
+	if objectCount < 0 || objectCount > 0xFFFF {
+		return fmt.Errorf("Number of objects can't be encoded (16bit): %d", objectCount)
+	}
+
+	if err := binary.Write(writer, order, int16(objectCount)); err != nil {
+		return err
+	}
+
+	if layer == nil {
+		return nil
+	}
+
+	for i, object := range layer.Objects {
+		var offset uint32
+
+		if object.TileSet == nil {
+			return fmt.Errorf("The object (%d, layer=%q) can't be encoded. No valid tileset.", i, layer.Name)
+		} else if object.TileSet.Type != DECORATION_TILESET {
+			return fmt.Errorf("Unsupported object tileset (%d, layer=%q). Only the decoration tileset can be used for object layers", i, layer.Name)
+		} else {
+			offset = object.TileSet.FirstGid - 1
+		}
+		tileID := object.Index - offset
+
+		if tileID < 0 || tileID > 0xFF {
+			return fmt.Errorf("Tile index of object can't be encoded (not within range [0,256]): %d", tileID)
+		}
+
+		writer.WriteByte(byte(object.Flags))
+		writer.WriteByte(byte(uint8(tileID)))
+
+		if err := writeFloat(writer, order, object.X/float32(object.TileSet.TileWidth)); err != nil {
+			return fmt.Errorf("Unable to encode object (%d, layer=%q) - Failed to write x-coordinate: %v", i, layer.Name, err)
+		}
+		if err := writeFloat(writer, order, (object.Y-object.Height)/float32(object.TileSet.TileWidth)); err != nil { // invert y axis
+			return fmt.Errorf("Unable to encode object (%d, layer=%q) - Failed to write y-coordinate: %v", i, layer.Name, err)
+		}
+		if err := writeFloat(writer, order, object.Width/float32(object.TileSet.TileHeight)); err != nil {
+			return fmt.Errorf("Unable to encode object (%d, layer=%q) - Failed to write width: %v", i, layer.Name, err)
+		}
+		if err := writeFloat(writer, order, object.Height/float32(object.TileSet.TileHeight)); err != nil {
+			return fmt.Errorf("Unable to encode object (%d, layer=%q) - Failed to write height: %v", i, layer.Name, err)
+		}
+		if err := writeFloat(writer, order, object.Rotation); err != nil {
+			return fmt.Errorf("Unable to encode object (%d, layer=%q) - Failed to write rotation: %v", i, layer.Name, err)
+		}
+	}
+	return nil
+}
+
+func writeFloat(writer *bufio.Writer, order binary.ByteOrder, value float32) error {
+	var intVal int = int(value * 1000) // All floats are multiplied by 1000. The loader has to divide by 1000 to get the original float value.
+	return binary.Write(writer, order, int32(intVal))
 }
 
 func encodeResourcePoint(writer *bufio.Writer, order binary.ByteOrder, resource *ResourcePoint) error {

@@ -74,6 +74,17 @@ func Run() error {
 		log.Infof("\tPlayer %d: %d buildings, %d units", i, len(p.Buildings), len(p.Units))
 	}
 
+	objectCount := 0
+	if tilemap.ForegroundObjectLayer != nil {
+		objectCount = len(tilemap.ForegroundObjectLayer.Objects)
+	}
+	log.Infof("Number of objects in foreground object layer: %d", objectCount)
+	objectCount = 0
+	if tilemap.BackgroundObjectLayer != nil {
+		objectCount = len(tilemap.BackgroundObjectLayer.Objects)
+	}
+	log.Infof("Number of objects in background object layer: %d", objectCount)
+
 	log.Infof("Number of borders (left, right, up, down): %d, %d, %d, %d",
 		len(borders.Left), len(borders.Right), len(borders.Up), len(borders.Down))
 	log.Infof("Number of borders (up-left, up-right, down-left, down-right): %d, %d, %d, %d",
