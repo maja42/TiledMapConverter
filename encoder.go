@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"math"
 )
 
 // Encode encodes and writes the given tilemap into the writer (=output file)
@@ -117,7 +118,7 @@ func probeLayer(layer *TileMapLayer) TileSetType {
 		}
 	}
 	log.Warningf("The layer %q is completely empty and should be removed", layer.Name)
-	return DECORATION_TILESET
+	return DECORATION1_TILESET
 }
 
 func encodeObjectLayer(writer *bufio.Writer, order binary.ByteOrder, layer *TileMapObjectLayer) error {
@@ -142,8 +143,8 @@ func encodeObjectLayer(writer *bufio.Writer, order binary.ByteOrder, layer *Tile
 
 		if object.TileSet == nil {
 			return fmt.Errorf("The object (%d, layer=%q) can't be encoded. No valid tileset.", i, layer.Name)
-		} else if object.TileSet.Type != DECORATION_TILESET {
-			return fmt.Errorf("Unsupported object tileset (%d, layer=%q). Only the decoration tileset can be used for object layers", i, layer.Name)
+		} else if object.TileSet.Type != DECORATION1_TILESET {
+			return fmt.Errorf("Unsupported object tileset (%d, layer=%q). Only the decoration tileset 1 can be used for object layers", i, layer.Name)
 		} else {
 			offset = object.TileSet.FirstGid - 1
 		}
@@ -153,13 +154,38 @@ func encodeObjectLayer(writer *bufio.Writer, order binary.ByteOrder, layer *Tile
 			return fmt.Errorf("Tile index of object can't be encoded (not within range [0,256]): %d", tileID)
 		}
 
-		writer.WriteByte(byte(object.Flags))
 		writer.WriteByte(byte(uint8(tileID)))
 
-		if err := writeFloat(writer, order, object.X/float32(object.TileSet.TileWidth)); err != nil {
+		// Tiled uses the bottom-left corner for the position. We store the object's center ==> convert!
+		localCenterX := object.Width / 2
+		localCenterY := object.Height / 2
+		cosRot := float32(math.Cos(float64(-object.Rotation) / 180 * math.Pi))
+		sinRot := float32(math.Sin(float64(-object.Rotation) / 180 * math.Pi))
+
+		rotatedCenterX := localCenterX*cosRot - localCenterY*sinRot
+		rotatedCenterY := localCenterX*sinRot + localCenterY*cosRot
+
+		centerX := object.X + rotatedCenterX
+		centerY := object.Y - rotatedCenterY // objects have an inverted coordinate system (up = positive)
+
+		Hor := (object.Flags & 0x01) != 0
+		Ver := (object.Flags & 0x02) != 0
+		Diag := (object.Flags & 0x04) != 0
+
+		if Hor {
+			object.Width = -object.Width
+		}
+		if Ver {
+			object.Height = -object.Height
+		}
+		if Diag {
+			return fmt.Errorf("Unable to encode object (%d, layer=%q) - Unexpected flag. Tiled should not set the diagonal-flipped flag, as such flips can always be expressed with X/Y-flips and rotations", i, layer.Name)
+		}
+
+		if err := writeFloat(writer, order, centerX/float32(object.TileSet.TileWidth)); err != nil {
 			return fmt.Errorf("Unable to encode object (%d, layer=%q) - Failed to write x-coordinate: %v", i, layer.Name, err)
 		}
-		if err := writeFloat(writer, order, (object.Y-object.Height)/float32(object.TileSet.TileWidth)); err != nil { // invert y axis
+		if err := writeFloat(writer, order, centerY/float32(object.TileSet.TileWidth)); err != nil { // invert y axis
 			return fmt.Errorf("Unable to encode object (%d, layer=%q) - Failed to write y-coordinate: %v", i, layer.Name, err)
 		}
 		if err := writeFloat(writer, order, object.Width/float32(object.TileSet.TileHeight)); err != nil {

@@ -36,8 +36,9 @@ type TileSetType uint8
 
 const (
 	ENVIRONMENT_TILESET TileSetType = 0
-	DECORATION_TILESET  TileSetType = 1
-	SPAWN_TILESET       TileSetType = 2
+	DECORATION1_TILESET TileSetType = 1
+	DECORATION2_TILESET TileSetType = 2
+	SPAWN_TILESET       TileSetType = 99
 )
 
 type TileSet struct {
@@ -286,8 +287,10 @@ func LoadTilesFile(filepath string) (tilemap TileMap, err error) {
 		switch strings.ToLower(tileset.Name) {
 		case "environment":
 			tilemap.Tilesets[idx].Type = ENVIRONMENT_TILESET
-		case "decoration":
-			tilemap.Tilesets[idx].Type = DECORATION_TILESET
+		case "decoration1":
+			tilemap.Tilesets[idx].Type = DECORATION1_TILESET
+		case "decoration2":
+			tilemap.Tilesets[idx].Type = DECORATION2_TILESET
 		case "spawn":
 			tilemap.Tilesets[idx].Type = SPAWN_TILESET
 		default:
