@@ -336,8 +336,6 @@ func LoadTilesFile(filepath string) (tilemap TileMap, err error) {
 			if tileID < 0 || tileID > 0xFFFFFF {
 				return tilemap, fmt.Errorf("Unexpected object layer data. Tile number is invalid (additional flag?)")
 			}
-			object.Index = tileID
-			object.Flags = flags
 
 			// Check which tileset the object belongs to
 			var tileSet *TileSet
@@ -350,7 +348,12 @@ func LoadTilesFile(filepath string) (tilemap TileMap, err error) {
 				if tileID >= tileSet.FirstGid+tileSet.TileCount {
 					return tilemap, fmt.Errorf("Unexpected object tile id %d. tileID does not belong to any tileset. Last valid id=%d", tileID, tileSet.FirstGid+tileSet.TileCount-1)
 				}
+
+				tileID -= (tileSet.FirstGid - 1)
 			}
+
+			object.Index = tileID
+			object.Flags = flags
 			object.TileSet = tileSet
 		}
 
@@ -413,6 +416,8 @@ func (layer *TileMapLayer) extractTiles(expectedTileCount int, Tilesets []TileSe
 			if tileID >= tileSet.FirstGid+tileSet.TileCount {
 				return fmt.Errorf("Unexpected tileID %d. tileID does not belong to any tileset. Last valid id=%d", tileID, tileSet.FirstGid+tileSet.TileCount-1)
 			}
+
+			tileID -= (tileSet.FirstGid - 1)
 		}
 
 		layer.Tiles[i] = Tile{

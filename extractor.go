@@ -146,18 +146,15 @@ func ExtractSpawnInfoFromLayer(width, height int, layer *TileMapLayer) ([]Resour
 			idx := y*width + x
 			tile := layer.Tiles[idx]
 
-			var offset uint32
-			if tile.Index == 0 {
-				offset = 0
-			} else if tile.TileSet == nil {
-				return nil, nil, nil, fmt.Errorf("Invalid map: Unknown tileset (x=%d, y=%d, layer=%q)", x, y, layer.Name)
-			} else if tile.TileSet.Type != SPAWN_TILESET {
-				return nil, nil, nil, fmt.Errorf("Invalid tileset: The tile (x=%d, y=%d, layer=%q) should be part of the Spawn TileSet, but it is part of the tileset %q.", x, y, layer.Name, tile.TileSet.Name)
-			} else {
-				offset = tile.TileSet.FirstGid - 1
+			if tile.Index != 0 {
+				if tile.TileSet == nil {
+					return nil, nil, nil, fmt.Errorf("Invalid map: Unknown tileset (x=%d, y=%d, layer=%q)", x, y, layer.Name)
+				} else if tile.TileSet.Type != SPAWN_TILESET {
+					return nil, nil, nil, fmt.Errorf("Invalid tileset: The tile (x=%d, y=%d, layer=%q) should be part of the Spawn TileSet, but it is part of the tileset %q.", x, y, layer.Name, tile.TileSet.Name)
+				}
 			}
 
-			tileID := tile.Index - offset
+			tileID := tile.Index
 			flags := tile.Flags
 
 			// check if this is a resource spawn tile
@@ -227,16 +224,13 @@ func ExtractSpawnInfoFromLayer(width, height int, layer *TileMapLayer) ([]Resour
 					identX, identY := x+vecX, y+vecY
 					buildingTile := layer.Tiles[identY*width+identX]
 
-					var offset uint32
 					if buildingTile.TileSet == nil {
 						return nil, nil, nil, fmt.Errorf("Invalid map: Unknown tileset. The tile (x=%d, y=%d, layer=%q) should be part of the Spawn TileSet, but is empty.", identX, identY, layer.Name)
 					} else if tile.TileSet.Type != SPAWN_TILESET {
 						return nil, nil, nil, fmt.Errorf("Invalid tileset: The tile (x=%d, y=%d, layer=%q) should be part of the Spawn TileSet, but it is part of the tileset %q.", identX, identY, layer.Name, tile.TileSet.Name)
-					} else {
-						offset = tile.TileSet.FirstGid - 1
 					}
 
-					tileID := buildingTile.Index - offset
+					tileID := buildingTile.Index
 					buildingFlags := buildingTile.Flags
 					if buildingFlags != flags {
 						return nil, nil, nil, fmt.Errorf("Invalid map: Inconsistent tile flags. The player mapping tile (x=%d, y=%d) and building tile (x=%d, y=%d) must have the same flags (layer=%q).", x, y, identX, identY, layer.Name)

@@ -87,13 +87,7 @@ func encodeLayer(writer *bufio.Writer, order binary.ByteOrder, layer *TileMapLay
 	writer.WriteByte(byte(tilesetType))
 
 	for i, tile := range layer.Tiles {
-		var offset uint32
-		if tile.TileSet == nil {
-			offset = 0
-		} else {
-			offset = tile.TileSet.FirstGid - 1
-		}
-		tileID := tile.Index - offset
+		tileID := tile.Index
 
 		if tileID > 0 && tile.TileSet.Type != tilesetType {
 			return fmt.Errorf("The tile (%d, layer=%q) can't be encoded. All tiles within a layer must come from the same tileset.", i, layer.Name)
@@ -139,16 +133,13 @@ func encodeObjectLayer(writer *bufio.Writer, order binary.ByteOrder, layer *Tile
 	}
 
 	for i, object := range layer.Objects {
-		var offset uint32
-
 		if object.TileSet == nil {
 			return fmt.Errorf("The object (%d, layer=%q) can't be encoded. No valid tileset.", i, layer.Name)
 		} else if object.TileSet.Type != DECORATION1_TILESET {
 			return fmt.Errorf("Unsupported object tileset (%d, layer=%q). Only the decoration tileset 1 can be used for object layers", i, layer.Name)
-		} else {
-			offset = object.TileSet.FirstGid - 1
 		}
-		tileID := object.Index - offset
+
+		tileID := object.Index
 
 		if tileID < 0 || tileID > 0xFF {
 			return fmt.Errorf("Tile index of object can't be encoded (not within range [0,256]): %d", tileID)
